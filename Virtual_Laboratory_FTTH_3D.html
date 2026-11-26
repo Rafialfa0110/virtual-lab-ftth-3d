@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Virtual Laboratory FTTH 3D</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<style>
+:root{--bg:#060d17;--panel:rgba(10,22,40,.82);--cyan:#22d3ee;--blue:#0ea5e9;--line:rgba(34,211,238,.25)}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:#e2e8f0;font-family:Inter,system-ui,Arial,sans-serif}
+body{background-image:radial-gradient(circle at 50% 48%,rgba(14,165,233,.13),transparent 42%),linear-gradient(rgba(34,211,238,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(34,211,238,.035) 1px,transparent 1px);background-size:auto,34px 34px,34px 34px}
+.glass{background:var(--panel);backdrop-filter:blur(15px);border:1px solid var(--line);box-shadow:0 10px 35px #0008,inset 0 0 22px #0ea5e90a}
+.card{background:rgba(15,31,56,.7);border:1px solid rgba(34,211,238,.16);transition:.2s}
+.card:hover,.card.active{border-color:var(--cyan);background:rgba(14,165,233,.17);box-shadow:0 0 18px #22d3ee22}
+button,input,select{font:inherit}button{cursor:pointer}
+#stage{position:absolute;inset:0;z-index:0}#pins{position:absolute;inset:0;pointer-events:none;z-index:5}
+.pin{position:absolute;pointer-events:auto;transform:translate(-50%,-50%);width:32px;height:32px;border-radius:50%;border:2px solid var(--cyan);background:#061321;color:var(--cyan);font-weight:800;box-shadow:0 0 15px #22d3ee88}
+.pin.selected{background:var(--cyan);color:#061321}
+header{position:absolute;z-index:20;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;gap:10px;pointer-events:none}
+header>*{pointer-events:auto}
+#left,#right{position:absolute;z-index:15;top:88px;bottom:94px;width:300px;display:flex;flex-direction:column;overflow:hidden}
+#left{left:12px}#right{right:12px;width:340px}
+#dock{position:absolute;z-index:20;bottom:12px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:7px;max-width:calc(100vw - 24px);overflow-x:auto;white-space:nowrap}
+.btn{border:1px solid #22d3ee44;background:#0b1c30;color:#b9f5ff;padding:9px 11px;border-radius:10px;font-size:12px}
+.btn.active{background:#0e7490;color:white;border-color:#67e8f9}
+.small{font-size:11px;color:#94a3b8}.tag{font:10px ui-monospace,monospace;letter-spacing:.12em;color:#67e8f9}
+#rightContent{overflow:auto;min-height:0}
+input[type=range]{accent-color:#22d3ee;width:110px}
+#toast{position:absolute;z-index:50;bottom:85px;left:50%;transform:translateX(-50%);display:none}
+@media(max-width:1050px){#left{width:260px}#right{width:290px}}
+@media(max-width:760px){header{top:7px;left:7px;right:7px}header .status{display:none}#left,#right{top:75px;bottom:82px;width:min(86vw,330px);transition:transform .25s}#left{transform:translateX(-115%)}#right{transform:translateX(115%)}#left.open,#right.open{transform:translateX(0)}#dock{bottom:7px}.brand h1{font-size:11px}.brand{padding:8px!important}}
+</style>
+</head>
+<body>
+<div id="stage"></div><div id="pins"></div>
+<header>
+ <div class="glass brand rounded-2xl px-4 py-3 flex items-center gap-3">
+  <div class="w-10 h-10 rounded-xl bg-cyan-500/15 border border-cyan-300/40 flex items-center justify-center text-cyan-300"><i data-lucide="network"></i></div>
+  <div><div class="tag">TELECOMMUNICATION • 3D INTERACTIVE</div><h1 class="font-extrabold text-sm md:text-base">VIRTUAL LABORATORY FTTH 3D</h1></div>
+ </div>
+ <div class="glass status rounded-2xl px-4 py-3">
+  <div class="tag">PERANGKAT AKTIF</div><div id="activeName" class="font-bold">OLT</div><div id="activeSub" class="small">Optical Line Terminal</div>
+ </div>
+ <div class="flex gap-2 md:hidden">
+  <button class="btn glass" onclick="togglePanel('left')">☰</button><button class="btn glass" onclick="togglePanel('right')">ⓘ</button>
+ </div>
+</header>
+
+<aside id="left" class="glass rounded-2xl">
+ <div class="p-3 border-b border-cyan-400/20">
+  <div class="flex justify-between items-center"><b class="tag">KATALOG PERANGKAT 3D</b><span class="small">7 perangkat</span></div>
+  <input id="search" class="w-full mt-3 rounded-xl bg-slate-950/80 border border-cyan-500/30 px-3 py-2 text-sm outline-none" placeholder="Cari perangkat...">
+  <div class="flex gap-1 mt-2"><button class="btn active" data-filter="Semua">Semua</button><button class="btn" data-filter="Pusat">Pusat</button><button class="btn" data-filter="Distribusi">Distribusi</button><button class="btn" data-filter="Pelanggan">Pelanggan</button></div>
+ </div>
+ <div id="catalog" class="p-3 overflow-auto space-y-2"></div>
+ <div class="p-3 border-t border-cyan-400/20 small">🖱️ Drag: putar • Scroll: zoom • Sentuh: interaksi 3D</div>
+</aside>
+
+<aside id="right" class="glass rounded-2xl">
+ <div class="p-4 border-b border-cyan-400/20">
+  <div class="tag">DETAIL & PEMBELAJARAN</div><h2 id="detailName" class="text-xl font-extrabold mt-1">OLT</h2><p id="detailLatin" class="small">Optical Line Terminal</p>
+ </div>
+ <div class="grid grid-cols-3 gap-1 p-2 border-b border-cyan-400/20">
+  <button class="btn active tab" data-tab="struktur">Struktur</button><button class="btn tab" data-tab="klinis">Gangguan</button><button class="btn tab" data-tab="kuis">Kuis 3D</button>
+ </div>
+ <div id="rightContent" class="p-4"></div>
+</aside>
+
+<div id="dock" class="glass rounded-2xl p-2">
+ <button id="auto" class="btn active">⟳ Auto</button><button id="pinsBtn" class="btn active">⌖ Hotspot</button>
+ <button id="xray" class="btn">◉ X-Ray</button><button id="wire" class="btn">▧ Wireframe</button>
+ <select id="axis" class="btn"><option value="none">Irisan: Off</option><option value="x">Sagittal X</option><option value="y">Axial Y</option><option value="z">Coronal Z</option></select>
+ <input id="slice" type="range" min="-1.6" max="1.6" step=".02" value="0" title="Jarak irisan">
+ <button id="simulate" class="btn">▶ Simulasi Sinyal</button><button id="reset" class="btn">⌂ Reset Kamera</button>
+</div>
+<div id="toast" class="glass rounded-xl px-4 py-2 text-sm"></div>
+
+<script>
+const devices=[
+{id:'olt',name:'OLT',full:'Optical Line Terminal',cat:'Pusat',desc:'Perangkat aktif di sentral/provider yang mengendalikan komunikasi jaringan PON dan mengirimkan sinyal optik menuju pelanggan melalui ODN.',specs:[['Lokasi','Central Office'],['Peran','Mengelola jaringan PON'],['Antarmuka','PON / uplink'],['Koneksi','Menuju ODF']],parts:[['Port PON','Antarmuka optik yang menghubungkan OLT dengan jaringan distribusi optik.'],['Slot kartu','Tempat modul layanan dan kartu GPON/EPON dipasang.'],['Port uplink','Menghubungkan OLT ke jaringan agregasi atau metro.'],['Kipas pendingin','Menjaga suhu perangkat selama beroperasi.'],['Indikator LED','Menampilkan status daya, alarm, dan link.']],issues:[['LOS / kehilangan sinyal','Kabel optik putus, konektor kotor, atau jalur optik terputus.','Pelanggan pada port terkait kehilangan layanan.'],['Port PON down','Modul optik atau konfigurasi port bermasalah.','ONT tidak dapat registrasi ke OLT.'],['Suhu tinggi','Sirkulasi udara atau kipas pendingin terganggu.','Perangkat dapat mengalami penurunan performa.']]},
+{id:'odf',name:'ODF',full:'Optical Distribution Frame',cat:'Pusat',desc:'Rak terminasi dan manajemen serat optik yang menjadi titik penghubung kabel feeder dari perangkat transmisi ke kabel luar/ODN.',specs:[['Lokasi','Ruang perangkat'],['Peran','Terminasi & patching'],['Komponen','Adapter, pigtail, tray'],['Koneksi','OLT ↔ feeder']],parts:[['Adapter panel','Titik koneksi konektor patch cord.'],['Pigtail','Serat pendek yang disambung ke kabel utama.'],['Splice tray','Tempat melindungi sambungan serat.'],['Patch cord','Kabel jumper untuk menghubungkan port.'],['Manajemen kabel','Menata radius tekuk dan jalur serat.']],issues:[['Loss tinggi','Konektor kotor atau sambungan buruk.','Daya optik yang diterima turun.'],['Patch cord tertukar','Label atau dokumentasi port tidak sesuai.','Jalur pelanggan salah sambung.'],['Bending loss','Serat ditekuk terlalu tajam.','Redaman meningkat.']]},
+{id:'odc',name:'ODC',full:'Optical Distribution Cabinet',cat:'Distribusi',desc:'Kabinet distribusi optik di jaringan luar yang menjadi titik terminasi kabel feeder dan distribusi serta dapat menampung splitter.',specs:[['Lokasi','Outdoor / tepi jalan'],['Peran','Distribusi feeder'],['Isi','Tray, adapter, splitter'],['Koneksi','Feeder ↔ distribusi']],parts:[['Kabinet','Pelindung komponen dari lingkungan.'],['Tray sambungan','Mengatur sambungan serat optik.'],['Adapter','Titik terminasi konektor.'],['Splitter tray','Tempat modul pembagi optik.'],['Cable gland','Jalur masuk kabel ke kabinet.']],issues:[['Air masuk','Seal atau pintu kabinet tidak rapat.','Kelembapan dapat merusak sambungan.'],['Kabel tertarik','Pengikatan kabel tidak kuat.','Sambungan dapat terganggu.'],['Label tidak jelas','Dokumentasi jalur tidak rapi.','Memperlambat pemeliharaan.']]},
+{id:'splitter',name:'Splitter',full:'Passive Optical Splitter',cat:'Distribusi',desc:'Komponen pasif yang membagi daya optik dari satu input menjadi beberapa output. Splitter tidak membutuhkan catu daya listrik.',specs:[['Jenis','PLC / FBT'],['Rasio contoh','1:8'],['Sifat','Pasif'],['Fungsi','Membagi daya optik']],parts:[['Port input','Menerima sinyal optik dari arah OLT.'],['Rangkaian pembagi','Mendistribusikan daya optik ke beberapa keluaran.'],['Port output','Mengirim sinyal ke jalur pelanggan.'],['Housing','Melindungi chip dan serat internal.'],['Label rasio','Menunjukkan jumlah pembagian, misalnya 1:8.']],issues:[['Output tidak seimbang','Kualitas komponen atau konektor buruk.','Level daya antarjalur berbeda.'],['Loss besar','Rasio pembagian tinggi atau koneksi buruk.','Daya terima ONT bisa di bawah batas.'],['Port rusak','Konektor atau pigtail patah.','Satu atau beberapa pelanggan terputus.']]},
+{id:'odp',name:'ODP',full:'Optical Distribution Point',cat:'Distribusi',desc:'Titik distribusi dekat area pelanggan yang menghubungkan kabel distribusi dengan kabel drop menuju rumah pelanggan.',specs:[['Lokasi','Tiang / dinding'],['Peran','Titik distribusi akhir'],['Isi','Adapter & splice'],['Koneksi','Distribusi ↔ drop']],parts:[['Enclosure','Kotak pelindung sambungan.'],['Adapter SC','Port konektor menuju drop cable.'],['Splice tray','Melindungi sambungan serat.'],['Pigtail','Menghubungkan serat ke adapter.'],['Label port','Identitas jalur pelanggan.']],issues:[['Port kotor','Debu pada konektor SC.','Redaman konektor meningkat.'],['Drop lepas','Konektor tidak terkunci baik.','ONT tidak menerima sinyal.'],['Air / debu','Penutup tidak rapat.','Kualitas sambungan menurun.']]},
+{id:'cable',name:'Kabel Fiber Optic',full:'Feeder • Distribution • Drop Cable',cat:'Distribusi',desc:'Media transmisi yang membawa informasi dalam bentuk cahaya melalui inti serat kaca/plastik. Jenis kabel disesuaikan dengan segmen jaringan.',specs:[['Media','Serat kaca'],['Transmisi','Cahaya'],['Segmen','Feeder / distribusi / drop'],['Karakteristik','Bandwidth tinggi']],parts:[['Core','Inti tempat cahaya merambat.'],['Cladding','Lapisan dengan indeks bias lebih rendah untuk menjaga cahaya di core.'],['Coating','Pelindung primer serat.'],['Strength member','Elemen penguat kabel.'],['Outer jacket','Pelindung bagian luar kabel.']],issues:[['Fiber patah','Tarikan atau tekukan berlebihan.','Sinyal terputus.'],['Macrobending','Radius tekuk terlalu kecil.','Terjadi tambahan redaman.'],['Microbending','Tekanan kecil pada serat.','Daya optik berkurang.']]},
+{id:'ont',name:'ONT / ONU',full:'Optical Network Terminal / Unit',cat:'Pelanggan',desc:'Perangkat di sisi pelanggan yang mengakhiri jalur optik PON dan mengubah sinyal optik menjadi antarmuka layanan seperti Ethernet, Wi-Fi, atau telepon.',specs:[['Lokasi','Rumah pelanggan'],['Peran','Terminasi optik'],['Output','Ethernet / Wi-Fi'],['Koneksi','Drop cable dari ODP']],parts:[['Port optik','Masukan sinyal fiber dari ODP.'],['Port LAN','Koneksi ke komputer atau router.'],['Antena Wi-Fi','Menyediakan jaringan nirkabel pada model Wi-Fi.'],['Indikator PON/LOS','Status registrasi dan sinyal optik.'],['Power input','Catu daya ONT.']],issues:[['LOS merah','Sinyal optik tidak diterima.','Internet terputus.'],['PON berkedip','Registrasi atau link belum stabil.','Layanan belum aktif.'],['Wi-Fi lambat','Interferensi atau penempatan perangkat.','Kecepatan nirkabel menurun.']]}
+];
+
+const devicePins={
+ olt:[[0,.45,.55],[-.95,-.03,.56],[.65,-.1,-.56],[0,.48,0],[0,-.35,-.57]],
+ odf:[[0,1.1,.35],[-.8,.48,.35],[.8,-.48,.35],[0,-1.35,.28],[0,.2,-.45]],
+ odc:[[0,1.4,.58],[-.42,.2,.7],[.48,.2,.7],[0,-1.2,.58],[-.42,-.78,.7]],
+ splitter:[[-.82,-.02,.42],[-.25,0,.42],[.45,-.05,.42],[0,.36,.36],[.7,-.25,.7]],
+ odp:[[0,.75,.35],[-.55,.35,.44],[.55,-.35,.44],[0,-.75,.35],[0,-.4,-.35]],
+ cable:[[-1.2,0,.55],[-.4,0,.5],[.4,0,.5],[1.2,0,.55],[0,.42,.25]],
+ ont:[[0,.59,.28],[-.52,-.2,.32],[.48,.12,.33],[-.2,-.8,.55],[0,1.0,-.12]]
+};
+
+let current='olt',activePin=0,activeTab='struktur',quizQuestion=0,quizScore=0,showPins=true,autoRotate=true,xray=false,wire=false,clipPlane=null,signal=null;
+const $=id=>document.getElementById(id);
+let scene,camera,renderer,controls,model,pinEls=[],clock=new THREE.Clock();
+
+function mat(color,metal=0,rough=.45){
+ return new THREE.MeshStandardMaterial({color,metalness:metal,roughness:rough});
+}
+const steel=mat(0x64748b,.75,.3),dark=mat(0x172b42,.55,.38),blue=mat(0x0e7490,.45,.3),cyan=mat(0x22d3ee,.4,.25),black=mat(0x07111e,.2,.55),white=mat(0xcbd5e1,.25,.4),yellow=mat(0xfbbf24,.25,.35),fiber=mat(0x38bdf8,.2,.3),green=mat(0x22c55e,.2,.35);
+
+function box(g,x,y,z,sx,sy,sz,m){let mesh=new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz),m);mesh.position.set(x,y,z);g.add(mesh);return mesh}
+function cyl(g,x,y,z,r1,r2,h,m,seg=24){let o=new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,h,seg),m);o.position.set(x,y,z);g.add(o);return o}
+function tube(g,pts,r,m){let curve=new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(...p)));let o=new THREE.Mesh(new THREE.TubeGeometry(curve,Math.max(24,pts.length*10),r,8,false),m);g.add(o);return o}
+function sphere(g,x,y,z,sx,sy,sz,m){let o=new THREE.Mesh(new THREE.SphereGeometry(1,24,18),m);o.position.set(x,y,z);o.scale.set(sx,sy,sz);g.add(o);return o}
+
+function makeModel(id){
+ const g=new THREE.Group();
+ if(id==='olt'){
+  box(g,0,0,0,2.5,.85,1.05,dark);box(g,0,.46,0,2.48,.08,1.03,steel);
+  for(let i=0;i<12;i++){box(g,-1.05+i*.19,-.03,.54,.12,.24,.025,black);sphere(g,-1.05+i*.19,-.03,.58,.025,.025,.018,i%3?green:yellow)}
+  for(let i=0;i<4;i++){box(g,-.8+i*.53,-.1,-.54,.42,.52,.06,blue);for(let j=0;j<4;j++)cyl(g,-.92+i*.53+j*.09,-.12,-.59,.035,.035,.04,cyan,12)}
+  for(let i=0;i<5;i++)box(g,-1+i*.5,-.35,-.57,.25,.025,.02,white);
+ }else if(id==='odf'){
+  box(g,0,0,0,2.25,2.65,.5,dark);box(g,0,1.35,0,2.3,.12,.56,steel);box(g,0,-1.35,0,2.3,.12,.56,steel);
+  for(let row=0;row<5;row++){box(g,0,.95-row*.48,.28,2.05,.36,.07,black);for(let i=0;i<12;i++){let x=-.9+i*.164;cyl(g,x,.95-row*.48,.34,.045,.045,.07,i%3===0?yellow:cyan,12)}}
+  for(let i=0;i<8;i++)tube(g,[[-.95+i*.27,-1.25,-.28],[-.95+i*.27,-.8,-.48],[-.8+i*.22,.8,-.45]],.018,i%2?fiber:yellow);
+ }else if(id==='odc'){
+  box(g,0,0,0,1.8,2.7,1.1,blue);box(g,0,0,.57,1.72,2.55,.08,steel);
+  box(g,-.42,0,.63,.78,2.3,.04,dark);box(g,.48,0,.63,.78,2.3,.04,dark);
+  for(let i=0;i<4;i++){box(g,-.42,-.78+i*.5,.68,.65,.34,.035,steel);for(let j=0;j<6;j++)cyl(g,-.68+j*.1,-.78+i*.5,.72,.025,.025,.035,cyan,10)}
+  for(let i=0;i<3;i++)box(g,.48,-.65+i*.62,.68,.65,.48,.04,black);
+  box(g,0,1.42,.58,1.8,.12,.1,yellow);
+ }else if(id==='splitter'){
+  box(g,0,0,0,1.8,.65,.72,white);box(g,0,.34,0,1.8,.08,.72,steel);
+  box(g,-.25,0,.39,.65,.22,.04,blue);for(let i=0;i<8;i++){cyl(g,.32+(i%4)*.32,-.05,.4,.055,.055,.07,cyan,12);tube(g,[[.32+(i%4)*.32,-.05,.42],[.4+(i%4)*.32,-.25,.7]],.012,fiber)}
+  cyl(g,-.82,-.02,.4,.07,.07,.08,yellow,12);
+ }else if(id==='odp'){
+  box(g,0,0,0,1.55,1.45,.65,white);box(g,0,.73,0,1.62,.12,.7,steel);box(g,0,-.73,0,1.62,.12,.7,steel);
+  box(g,0,0,.35,1.35,1.2,.05,dark);
+  for(let i=0;i<8;i++){cyl(g,-.55+(i%4)*.36,.35-Math.floor(i/4)*.7,.42,.075,.075,.08,cyan,16);sphere(g,-.55+(i%4)*.36,.35-Math.floor(i/4)*.7,.48,.025,.025,.02,yellow)}
+  tube(g,[[-.7,-.55,-.2],[0,-.35,-.35],[.65,-.55,-.2]],.035,fiber);
+ }else if(id==='cable'){
+  cyl(g,0,0,0,.63,.63,2.7,dark,48).rotation.z=Math.PI/2;
+  cyl(g,0,0,0,.46,.46,2.72,steel,48).rotation.z=Math.PI/2;
+  cyl(g,0,0,0,.31,.31,2.74,white,48).rotation.z=Math.PI/2;
+  cyl(g,0,0,0,.15,.15,2.78,cyan,48).rotation.z=Math.PI/2;
+  for(let i=0;i<6;i++){let a=i*Math.PI/3;sphere(g,0,Math.cos(a)*.35,Math.sin(a)*.35,.12,.12,.12,i%2?yellow:green)}
+  tube(g,[[-1.6,0,0],[1.6,0,0]],.07,fiber);
+ }else if(id==='ont'){
+  box(g,0,0,0,1.65,1.15,.55,white);box(g,0,.57,0,1.65,.08,.55,steel);
+  for(let i=0;i<4;i++)box(g,-.52+i*.35,-.2,.3,.2,.06,.035,black);
+  for(let i=0;i<4;i++)sphere(g,-.48+i*.3,.12,.31,.035,.035,.025,i===0?green:cyan);
+  for(let i=0;i<2;i++)cyl(g,-.5+i,.65,-.12,.035,.035,.7,black,12);
+  tube(g,[[-.2,-.45,.2],[-.2,-.8,.55],[.4,-.8,.55]],.045,fiber);
+ }
+ g.traverse(o=>{
+  if(o.isMesh){
+   o.material=o.material.clone();
+   o.userData.clonedMat=true;
+  }
+ });
+ return g;
+}
+
+function applyVisualModes(targetModel){
+ if(!targetModel)return;
+ const v=$('axis').value;
+ const normal=v==='x'?new THREE.Vector3(1,0,0):v==='y'?new THREE.Vector3(0,1,0):v==='z'?new THREE.Vector3(0,0,1):null;
+ clipPlane=normal?new THREE.Plane(normal,parseFloat($('slice').value)):null;
+ targetModel.traverse(o=>{
+  if(o.isMesh){
+   if(!o.userData.clonedMat){
+    o.material=o.material.clone();
+    o.userData.clonedMat=true;
+   }
+   o.material.transparent=xray;
+   o.material.opacity=xray?.35:1;
+   o.material.depthWrite=!xray;
+   o.material.wireframe=wire;
+   o.material.clippingPlanes=clipPlane?[clipPlane]:[];
+   o.material.needsUpdate=true;
+  }
+ });
+}
+
+function addPedestal(){
+ let p=new THREE.Group();
+ let base=new THREE.Mesh(new THREE.CylinderGeometry(1.65,1.8,.12,64),dark);base.position.y=-1.55;p.add(base);
+ let ring=new THREE.Mesh(new THREE.TorusGeometry(1.55,.025,12,100),cyan);ring.rotation.x=Math.PI/2;ring.position.y=-1.47;p.add(ring);
+ let disk=new THREE.Mesh(new THREE.CylinderGeometry(1.35,1.35,.025,64),mat(0x0b2438,.3,.6));disk.position.y=-1.47;p.add(disk);
+ scene.add(p);
+}
+
+function init3D(){
+ scene=new THREE.Scene();scene.fog=new THREE.Fog(0x060d17,9,22);
+ camera=new THREE.PerspectiveCamera(42,innerWidth/innerHeight,.1,100);camera.position.set(4,3.1,6.5);
+ renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);renderer.localClippingEnabled=true;$('stage').appendChild(renderer.domElement);
+ controls=new THREE.OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.autoRotate=true;controls.autoRotateSpeed=1.0;controls.target.set(0,0,0);
+ scene.add(new THREE.HemisphereLight(0x9deaff,0x101827,1.5));
+ let l=new THREE.DirectionalLight(0xffffff,2.1);l.position.set(4,7,5);scene.add(l);
+ let c=new THREE.PointLight(0x0ea5e9,2,12);c.position.set(-3,2,2);scene.add(c);
+ let grid=new THREE.GridHelper(16,32,0x155e75,0x123047);grid.position.y=-1.62;scene.add(grid);
+ addPedestal();
+ loadDevice(current);
+ window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+ animate();
+}
+
+function loadCustomGLB(url){
+ return new Promise((resolve,reject)=>{
+  if(!THREE.GLTFLoader){reject(new Error('GLTFLoader belum tersedia'));return}
+  new THREE.GLTFLoader().load(url,gltf=>{
+   if(model)scene.remove(model);
+   model=gltf.scene;scene.add(model);model.position.set(0,0,0);
+   applyVisualModes(model);
+   resolve(model);
+  },undefined,reject);
+ });
+}
+
+function loadDevice(id){
+ current=id;activePin=0;quizQuestion=0;
+ if(model){
+  scene.remove(model);
+  model.traverse(o=>{
+   if(o.geometry)o.geometry.dispose();
+   if(o.material&&o.userData.clonedMat)o.material.dispose();
+  });
+ }
+ model=makeModel(id);scene.add(model);model.position.y=.05;
+ applyVisualModes(model);
+ const d=devices.find(x=>x.id===id);
+ $('activeName').textContent=d.name;$('activeSub').textContent=d.full;$('detailName').textContent=d.name;$('detailLatin').textContent=d.full;
+ renderCatalog();renderTab();renderPins();
+ camera.position.set(4,3.1,6.5);controls.target.set(0,0,0);controls.update();
+}
+
+function renderCatalog(){
+ const q=$('search').value.toLowerCase(),filter=document.querySelector('[data-filter].active')?.dataset.filter||'Semua';
+ $('catalog').innerHTML=devices.filter(d=>(filter==='Semua'||d.cat===filter)&&(d.name+' '+d.full).toLowerCase().includes(q)).map(d=>`<button class="card ${d.id===current?'active':''} w-full text-left rounded-xl p-3" onclick="loadDevice('${d.id}')"><div class="flex justify-between"><b>${d.name}</b><span class="tag">${d.cat}</span></div><div class="small mt-1">${d.full}</div><div class="small mt-2 text-cyan-300">5 hotspot anatomi →</div></button>`).join('');
+}
+
+function renderTab(){
+ const d=devices.find(x=>x.id===current),root=$('rightContent');
+ document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===activeTab));
+ if(activeTab==='struktur'){
+  root.innerHTML=`<div class="tag mb-2">DESKRIPSI & FUNGSI</div><p class="text-sm leading-6 text-slate-300">${d.desc}</p><div class="grid grid-cols-2 gap-2 mt-4">${d.specs.map(s=>`<div class="card rounded-xl p-3"><div class="small">${s[0]}</div><b class="text-sm text-cyan-200">${s[1]}</b></div>`).join('')}</div><div class="mt-4 card rounded-xl p-3"><div class="tag mb-2">TITIK HOTSPOT AKTIF (#${activePin+1})</div><b>${d.parts[activePin][0]}</b><p class="small mt-2 leading-5">${d.parts[activePin][1]}</p></div>`;
+ }else if(activeTab==='klinis'){
+  root.innerHTML=`<div class="tag mb-3">GANGGUAN & TROUBLESHOOTING UMUM</div>${d.issues.map(i=>`<div class="card rounded-xl p-3 mb-2"><b class="text-sm text-rose-300">${i[0]}</b><p class="small mt-2"><b>Penyebab:</b> ${i[1]}</p><p class="small mt-1"><b>Dampak:</b> ${i[2]}</p></div>`).join('')}`;
+ }else{
+  const part=d.parts[quizQuestion%5];
+  root.innerHTML=`<div class="tag">KUIS IDENTIFIKASI PERANGKAT</div><div class="card rounded-xl p-4 mt-3"><p class="small">Pertanyaan ${quizQuestion%5+1} dari 5</p><h3 class="font-bold mt-2">Klik hotspot yang sesuai dengan petunjuk bagian perangkat <span class="text-cyan-300">${d.name}</span> di bawah ini.</h3><p class="small mt-3">Petunjuk: ${part[1]}</p><div class="mt-3 text-sm">Skor: <b id="score" class="text-cyan-300">${quizScore}</b></div><button class="btn mt-3 w-full" onclick="nextQuiz()">Pertanyaan berikutnya →</button><p id="quizFeedback" class="small mt-3">Klik pin nomor 1–5 pada objek 3D untuk menjawab.</p></div>`;
+ }
+}
+
+function renderPins(){
+ const pos=devicePins[current]||[[0,0.8,.45],[-.75,.2,.35],[.75,.15,.35],[0,-.5,.4],[0,.05,-.5]];
+ $('pins').innerHTML='';pinEls=[];
+ pos.forEach((p,i)=>{
+  let el=document.createElement('button');
+  el.className='pin'+(i===activePin?' selected':'');
+  el.textContent=i+1;
+  el.onclick=()=>selectPin(i);
+  $('pins').appendChild(el);
+  pinEls.push({el,p:new THREE.Vector3(...p)});
+ });
+}
+
+function selectPin(i){
+ activePin=i;document.querySelectorAll('.pin').forEach((e,n)=>e.classList.toggle('selected',n===i));
+ if(activeTab==='kuis'){
+  const correct=(quizQuestion%5)===i;
+  $('quizFeedback').textContent=correct?'Benar! Bagian berhasil diidentifikasi.':'Belum tepat. Coba perhatikan kembali model 3D.';
+  $('quizFeedback').style.color=correct?'#4ade80':'#fb7185';
+  if(correct){quizScore+=10;$('score').textContent=quizScore}
+ }else renderTab();
+}
+
+function nextQuiz(){quizQuestion=(quizQuestion+1)%5;renderTab()}
+
+function projectPins(){
+ if(!model)return;const w=innerWidth,h=innerHeight;
+ pinEls.forEach(({el,p})=>{
+  let v=p.clone();model.localToWorld(v);v.project(camera);
+  el.style.left=((v.x+1)*w/2)+'px';
+  el.style.top=((-v.y+1)*h/2)+'px';
+  el.style.display=showPins&&v.z<1?'block':'none';
+ });
+}
+
+function animate(){
+ requestAnimationFrame(animate);let t=clock.getElapsedTime();controls.update();
+ if(model&&$('simulate').classList.contains('active'))model.rotation.y=Math.sin(t*1.1)*.12;
+ if(signal){signal.position.x=Math.sin(t*1.7)*1.25;signal.position.z=Math.cos(t*1.7)*.6}
+ projectPins();renderer.render(scene,camera);
+}
+
+function toast(s){$('toast').textContent=s;$('toast').style.display='block';setTimeout(()=>$('toast').style.display='none',2200)}
+function togglePanel(which){$(which).classList.toggle('open')}
+function setToggle(id,on){$(id).classList.toggle('active',on)}
+
+document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-filter]').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderCatalog()});
+$('search').addEventListener('input',renderCatalog);
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{activeTab=b.dataset.tab;renderTab()});
+$('auto').onclick=()=>{autoRotate=!autoRotate;controls.autoRotate=autoRotate;setToggle('auto',autoRotate)};
+$('pinsBtn').onclick=()=>{showPins=!showPins;setToggle('pinsBtn',showPins)};
+$('xray').onclick=()=>{xray=!xray;applyVisualModes(model);setToggle('xray',xray)};
+$('wire').onclick=()=>{wire=!wire;applyVisualModes(model);setToggle('wire',wire)};
+$('axis').onchange=()=>{applyVisualModes(model)};
+$('slice').oninput=()=>{if(clipPlane)clipPlane.constant=parseFloat($('slice').value)};
+$('reset').onclick=()=>{camera.position.set(4,3.1,6.5);controls.target.set(0,0,0);controls.update();toast('Kamera dikembalikan ke posisi awal')};
+$('simulate').onclick=()=>{
+ if(signal){
+  scene.remove(signal);signal.geometry.dispose();signal.material.dispose();signal=null;
+  $('simulate').classList.remove('active');toast('Simulasi sinyal dihentikan');
+ }else{
+  signal=new THREE.Mesh(new THREE.SphereGeometry(.12,20,20),new THREE.MeshBasicMaterial({color:0x67e8f9}));
+  scene.add(signal);$('simulate').classList.add('active');toast('Simulasi perjalanan sinyal optik aktif');
+ }
+};
+
+init3D();renderCatalog();renderTab();lucide.createIcons();
+</script>
+</body></html>
